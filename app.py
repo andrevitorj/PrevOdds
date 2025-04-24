@@ -3,18 +3,18 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-# === CONFIG ===
-st.set_page_config(page_title="Odds Filtradas - Streamlit", layout="wide")
-st.title("Consulta de Odds Estratégicas via API-Football")
+# === CONFIGURAÇÃO INICIAL ===
+st.set_page_config(page_title="Odds Estratégicas - Bet365", layout="wide")
+st.title("Consulta de Odds Estratégicas (Bet365) via API-Football")
 
 # === API Key ===
 API_KEY = 'f8004fe5cca0e75109a44ae6b4cdd9a2'
 HEADERS = {'x-apisports-key': API_KEY}
 
-# === Data input ===
+# === INPUT DE DATA ===
 data_input = st.date_input("Selecione a data da partida", datetime.today()).strftime("%Y-%m-%d")
 
-# === Buscar partidas com odds disponíveis ===
+# === BUSCAR PARTIDAS COM ODDS ===
 st.info(f"Buscando partidas com odds para {data_input}...")
 url_odds = f"https://v3.football.api-sports.io/odds?date={data_input}"
 resp = requests.get(url_odds, headers=HEADERS)
@@ -24,7 +24,7 @@ if not odds_response:
     st.warning("Nenhuma partida com odds disponíveis nesta data.")
     st.stop()
 
-# === Preparar lista de partidas ===
+# === LISTA DE PARTIDAS ===
 partidas = []
 for jogo in odds_response:
     fixture_id = jogo['fixture']['id']
@@ -44,9 +44,9 @@ for jogo in odds_response:
         'jogo': jogo
     })
 
-# === Selecionar partida ===
+# === SELECIONAR PARTIDA ===
 options = [p['label'] for p in partidas]
-selecionada = st.selectbox("Escolha a partida para ver odds estratégicas:", options)
+selecionada = st.selectbox("Escolha a partida para ver odds da Bet365:", options)
 
 if selecionada:
     jogo_escolhido = next(p['jogo'] for p in partidas if p['label'] == selecionada)
@@ -54,9 +54,9 @@ if selecionada:
     away = jogo_escolhido['teams']['away']
     fixture_id = jogo_escolhido['fixture']['id']
 
-    st.subheader(f"Odds filtradas: {home} x {away}")
+    st.subheader(f"Odds filtradas da Bet365: {home} x {away}")
 
-    # === Filtros estratégicos de mercado ===
+    # === MERCADOS RELEVANTES ===
     mercados_permitidos = [
         "Match Winner", "1X2",
         "Asian Handicap",
@@ -67,32 +67,35 @@ if selecionada:
         "Both Teams To Score", "BTTS"
     ]
 
+    # === COLETAR DADOS SÓ DA BET365 ===
     csv_data = []
     for bookmaker in jogo_escolhido['bookmakers']:
-        casa = bookmaker['name']
+        if bookmaker['name'].lower() != "bet365":
+            continue
+
         for bet in bookmaker['bets']:
             nome_mercado = bet['name']
             if any(p.lower() in nome_mercado.lower() for p in mercados_permitidos):
                 for val in bet['values']:
                     csv_data.append({
-                        'Casa': casa,
+                        'Casa': bookmaker['name'],
                         'Mercado': nome_mercado,
                         'Linha': val['value'],
                         'Odd': val['odd']
                     })
 
+    # === MOSTRAR TABELA E DOWNLOAD ===
     if csv_data:
         df = pd.DataFrame(csv_data)
         st.dataframe(df, use_container_width=True)
 
-        # === Botão de download ===
         csv_file = df.to_csv(index=False).encode('utf-8')
-        nome_arquivo = f"odds_{home}_vs_{away}_{data_input}.csv".replace(' ', '_').replace('/', '-')
+        nome_arquivo = f"odds_{home}_vs_{away}_{data_input}_bet365.csv".replace(' ', '_').replace('/', '-')
         st.download_button(
-            label="📥 Baixar arquivo CSV",
+            label="📥 Baixar CSV",
             data=csv_file,
             file_name=nome_arquivo,
             mime='text/csv'
         )
     else:
-        st.warning("Nenhum mercado relevante encontrado para esta partida.")
+        st.warning("A casa Bet365 não disponibilizou odds relevantes para esta partida.")
