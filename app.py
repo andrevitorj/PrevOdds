@@ -3,11 +3,11 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-# === CONFIGURAÇÃO INICIAL ===
-st.set_page_config(page_title="Odds Estratégicas - Bet365", layout="wide")
-st.title("Consulta de Odds Estratégicas (Bet365) via API-Football")
+# === CONFIG STREAMLIT ===
+st.set_page_config(page_title="Odds Estratégicas", layout="wide")
+st.title("Consulta de Odds Estratégicas (Bet365 + Betano) via API-Football")
 
-# === API Key ===
+# === CHAVE DE API ===
 API_KEY = 'f8004fe5cca0e75109a44ae6b4cdd9a2'
 HEADERS = {'x-apisports-key': API_KEY}
 
@@ -24,7 +24,7 @@ if not odds_response:
     st.warning("Nenhuma partida com odds disponíveis nesta data.")
     st.stop()
 
-# === LISTA DE PARTIDAS ===
+# === LISTAR PARTIDAS ===
 partidas = []
 for jogo in odds_response:
     fixture_id = jogo['fixture']['id']
@@ -46,7 +46,7 @@ for jogo in odds_response:
 
 # === SELECIONAR PARTIDA ===
 options = [p['label'] for p in partidas]
-selecionada = st.selectbox("Escolha a partida para ver odds da Bet365:", options)
+selecionada = st.selectbox("Escolha a partida:", options)
 
 if selecionada:
     jogo_escolhido = next(p['jogo'] for p in partidas if p['label'] == selecionada)
@@ -54,9 +54,9 @@ if selecionada:
     away = jogo_escolhido['teams']['away']
     fixture_id = jogo_escolhido['fixture']['id']
 
-    st.subheader(f"Odds filtradas da Bet365: {home} x {away}")
+    st.subheader(f"Odds filtradas: {home} x {away} (Bet365 e Betano)")
 
-    # === MERCADOS RELEVANTES ===
+    # === MERCADOS RELEVANTES (somente jogo) ===
     mercados_permitidos = [
         "Match Winner", "1X2",
         "Asian Handicap",
@@ -67,19 +67,28 @@ if selecionada:
         "Both Teams To Score", "BTTS"
     ]
 
-    # === COLETAR DADOS SÓ DA BET365 ===
+    palavras_proibidas = [
+        "player", "scorer", "assist", "passes", "shots on", "shots by", 
+        "goals by", "cards by", "player to", "team to", "1st to"
+    ]
+
+    casas_permitidas = ['bet365', 'betano']
+
+    # === COLETAR E FILTRAR ODDS ===
     csv_data = []
     for bookmaker in jogo_escolhido['bookmakers']:
-        if bookmaker['name'].lower() != "bet365":
+        nome_casa = bookmaker['name'].lower()
+        if nome_casa not in casas_permitidas:
             continue
 
         for bet in bookmaker['bets']:
-            nome_mercado = bet['name']
-            if any(p.lower() in nome_mercado.lower() for p in mercados_permitidos):
+            nome_mercado = bet['name'].lower()
+
+            if any(p.lower() in nome_mercado for p in mercados_permitidos) and not any(ban in nome_mercado for ban in palavras_proibidas):
                 for val in bet['values']:
                     csv_data.append({
                         'Casa': bookmaker['name'],
-                        'Mercado': nome_mercado,
+                        'Mercado': bet['name'],
                         'Linha': val['value'],
                         'Odd': val['odd']
                     })
@@ -90,12 +99,12 @@ if selecionada:
         st.dataframe(df, use_container_width=True)
 
         csv_file = df.to_csv(index=False).encode('utf-8')
-        nome_arquivo = f"odds_{home}_vs_{away}_{data_input}_bet365.csv".replace(' ', '_').replace('/', '-')
+        nome_arquivo = f"odds_{home}_vs_{away}_{data_input}_bet365_betano.csv".replace(' ', '_').replace('/', '-')
         st.download_button(
-            label="📥 Baixar CSV",
+            label="📥 Baixar arquivo CSV",
             data=csv_file,
             file_name=nome_arquivo,
             mime='text/csv'
         )
     else:
-        st.warning("A casa Bet365 não disponibilizou odds relevantes para esta partida.")
+        st.warning("Nem Bet365 nem Betano possuem mercados relevantes para essa partida.")
